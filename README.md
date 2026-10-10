@@ -72,6 +72,24 @@ npm test                      # dotnet test, then the web tests (Vitest)
 ```
 
 Both pass on a clean checkout and neither needs a database.
+## DEFECT-117: filters not taking effect
+
+**Root cause.** The `useEffect` in `useTicketList` only had `search`, `page` and `pageSize` in its
+dependency array. So when I changed status (or priority, category, customer, agent, unassigned,
+sort) the effect never ran again and no request was sent. It only caught up on the next search
+keystroke, which is why the status looked stale.
+
+**Fix.** The request now depends on the whole filter object, so any filter change sends a request
+straight away. Search is handled separately: what the user types is kept in its own state and only
+copied into the filters 300 ms after they stop typing, and the page goes back to 1 at that point.
+I also switched the fetching to the existing `useAsyncData` hook instead of the manual
+loading/error code, and removed the `eslint-disable` comment that was hiding the problem.
+
+**How to check.** Run `npm run test --workspace apps/web`. The tests in `useTicketList.test.ts`
+check the arguments of the request that is sent. On the original hook 8 of them failed (status,
+priority, category, customer, agent, unassigned only, sort and reset), and they all pass now.
+Manually: open the Network tab, change Status and a request goes out immediately, then type in the
+search box and only one request goes out after you stop typing.
 
 ## Commands
 

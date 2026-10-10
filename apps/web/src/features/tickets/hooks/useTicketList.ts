@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
-import { ApiError } from '../../../api/client';
+import { useCallback, useEffect, useState } from 'react';
 import { ticketsApi } from '../../../api/tickets';
-import type { PagedResult, TicketFilters, TicketListItem } from '../../../types/api';
+import { useAsyncData } from '../../../hooks/useAsyncData';
+import type { TicketFilters } from '../../../types/api';
 
 const DEBOUNCE_MS = 300;
+
+const LOAD_ERROR = 'Unable to load tickets.';
 
 export const emptyFilters: TicketFilters = {
   search: '',
@@ -19,40 +21,59 @@ export const emptyFilters: TicketFilters = {
   sortDirection: 'desc',
 };
 
-interface State {
-  isLoading: boolean;
-  data?: PagedResult<TicketListItem>;
-  error?: string;
-}
-
-/** Owns the ticket list's filters and the data they produce. */
+/**
+ * Owns the ticket list's filters and the data they produce.
+ *
+ * `filters` is the committed set: it is exactly what the last request was made with, and any
+ * change to it loads the list again. Typing is the one exception, since a request per keystroke
+ * would be wasteful: the text lives in `searchText` and is only committed once typing settles.
+ * Because every other filter goes straight into `filters`, adding one (e.g. the SLA status)
+ * needs no extra wiring here.
+ */
 export function useTicketList() {
   const [filters, setFilters] = useState<TicketFilters>(emptyFilters);
-  const [state, setState] = useState<State>({ isLoading: true });
+  const [searchText, setSearchText] = useState(emptyFilters.search);
 
-  const load = async () => {
-    setState((current) => ({ ...current, isLoading: true, error: undefined }));
+  // A new function (so a new request) exactly when the committed filters change.
+  const loadTickets = useCallback(() => ticketsApi.getTickets(filters), [filters]);
+  const { data, error, isLoading, reload } = useAsyncData(loadTickets, LOAD_ERROR);
 
-    try {
-      const data = await ticketsApi.getTickets(filters);
-      setState({ isLoading: false, data, error: undefined });
-    } catch (error) {
-      const message = error instanceof ApiError ? error.message : 'Unable to load tickets.';
-      setState((current) => ({ ...current, isLoading: false, error: message }));
+  // Commits the typed search once the user stops typing. A new search starts again at page 1.
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setFilters((current) =>
+        current.search === searchText ? current : { ...current, search: searchText, page: 1 },
+      );
+    }, DEBOUNCE_MS);
+
+    return () => window.clearTimeout(handle);
+  }, [searchText]);
+
+  const updateFilters = (patch: Partial<TicketFilters>) => {
+    const { search, ...immediate } = patch;
+
+    if (search !== undefined) {
+      setSearchText(search);
+    }
+
+    if (Object.keys(immediate).length > 0) {
+      setFilters((current) => ({ ...current, ...immediate, page: immediate.page ?? 1 }));
     }
   };
 
-  useEffect(() => {
-    const handle = window.setTimeout(load, DEBOUNCE_MS);
+  const resetFilters = () => {
+    setSearchText(emptyFilters.search);
+    setFilters(emptyFilters);
+  };
 
-    return () => window.clearTimeout(handle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- filters object identity changes every render
-  }, [filters.search, filters.page, filters.pageSize]);
-
-  const updateFilters = (patch: Partial<TicketFilters>) =>
-    setFilters((current) => ({ ...current, ...patch, page: patch.page ?? 1 }));
-
-  const resetFilters = () => setFilters(emptyFilters);
-
-  return { filters, updateFilters, resetFilters, reload: load, ...state };
+  // The search box shows what was typed, even while the request for it is still pending.
+  return {
+    filters: { ...filters, search: searchText },
+    updateFilters,
+    resetFilters,
+    reload,
+    isLoading,
+    data,
+    error,
+  };
 }
