@@ -71,7 +71,9 @@ credentials.**
 npm test                      # dotnet test, then the web tests (Vitest)
 ```
 
-Both pass on a clean checkout and neither needs a database.
+Both pass on a clean checkout and neither needs a database server. The ticket query tests run
+against in-memory SQLite.
+
 ## DEFECT-117: filters not taking effect
 
 **Root cause.** The `useEffect` in `useTicketList` only had `search`, `page` and `pageSize` in its
@@ -91,6 +93,28 @@ priority, category, customer, agent, unassigned only, sort and reset), and they 
 Manually: open the Network tab, change Status and a request goes out immediately, then type in the
 search box and only one request goes out after you stop typing.
 
+## Filtering (Task 1.2)
+
+**Where.** The filters are applied in `TicketQueries.ApplyFilters`
+(`SupportDesk.Infrastructure/Queries`). Each filter is one `WhereIf(condition, predicate)` line, and
+they are chained, so a ticket has to match all the filters that were supplied (AND). The result of
+that is what gets counted, sorted and paged, so `totalCount` and `totalPages` are for the filtered
+set and not for all tickets. Nothing is filtered in C#. Trimming the search text and treating a blank
+search as "no search" is done in one place, `TicketQuery.Normalized()`.
+
+**Rules as I understood them.** Status, priority, category, customer and agent are exact matches, so
+priority `High` does not also return `Critical`. Search is a "contains" match on the ticket title, the
+reference or the customer name. `unassignedOnly=true` together with `assignedAgentId` is an AND, so it
+returns nothing.
+
+**How I checked the SQL.** Development mode logs every EF Core command. I ran the API, changed the
+filters in the UI and read the log. The `COUNT(*)` statement and the page statement both have the same
+`WHERE`, and it comes before `OFFSET/FETCH`. `TicketQueriesFilterTests` also runs the same LINQ as
+real SQL on in-memory SQLite.
+
+**Adding the next filter.** For `slaStatus` in Task 2, add the property to `TicketQuery` and one
+`WhereIf` line to `ApplyFilters`. Counting, sorting and paging stay as they are.
+
 ## Commands
 
 | Command | What it does |
@@ -105,7 +129,7 @@ search box and only one request goes out after you stop typing.
 
 | Endpoint | Description |
 | --- | --- |
-| `GET /api/tickets` | Paged list with `search`, `status`, `priority`, `categoryId`, `customerId`, `assignedAgentId`, `unassignedOnly`, `sortBy`, `sortDirection`. **Filters are accepted but not applied yet** (Task 1). |
+| `GET /api/tickets` | Paged list with `search`, `status`, `priority`, `categoryId`, `customerId`, `assignedAgentId`, `unassignedOnly`, `sortBy`, `sortDirection`. Every filter is applied in the database and they combine with AND. |
 | `GET /api/tickets/{id}` | One ticket |
 | `POST /api/tickets` | Create a ticket |
 | `PATCH /api/tickets/{id}/status` · `/assignment` | Change status / assignee |

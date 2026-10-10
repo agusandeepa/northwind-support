@@ -8,6 +8,10 @@ namespace SupportDesk.Application.Abstractions;
 /// </summary>
 public interface ITicketQueries
 {
+    /// <summary>
+    /// One page of the tickets that match every filter in <paramref name="query"/>. The total
+    /// count is of the filtered set, not of all tickets.
+    /// </summary>
     /// <param name="query">Filters, sorting and paging, already normalized.</param>
     /// <param name="ct">Cancellation token.</param>
     Task<PagedResult<TicketListItemDto>> GetPagedAsync(TicketQuery query, CancellationToken ct);
