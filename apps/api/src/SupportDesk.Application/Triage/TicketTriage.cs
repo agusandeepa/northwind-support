@@ -25,6 +25,7 @@ public sealed class TicketTriage(SlaCalculator sla, AgentSelector agents)
         TicketPriority? requested,
         DateTime nowUtc,
         IEnumerable<AgentWorkload> workloads)
+
     {
         var priority = category.ResolvePriority(requested);
         var window = sla.WindowFor(priority, tier);
@@ -35,6 +36,28 @@ public sealed class TicketTriage(SlaCalculator sla, AgentSelector agents)
             window,
             window.DueAt(nowUtc),
             agents.Choose(workloads, category));
+    }
+
+    /// <summary>
+    /// The outcome of escalating a ticket to <paramref name="newPriority"/>: a fresh window from
+    /// now, and the current agent kept while they are still eligible.
+    /// </summary>
+    public TriageDecision ForEscalation(
+        Category category,
+        CustomerTier tier,
+        TicketPriority newPriority,
+        int? currentAgentId,
+        DateTime nowUtc,
+        IEnumerable<AgentWorkload> workloads)
+    {
+        var window = sla.WindowFor(newPriority, tier);
+
+        return new TriageDecision(
+            newPriority,
+            $"Escalated one level, to {newPriority}.",
+            window,
+            window.DueAt(nowUtc),
+            agents.KeepOrChoose(currentAgentId, workloads, category));
     }
 
     private static string PriorityReason(Category category, TicketPriority? requested, TicketPriority priority)

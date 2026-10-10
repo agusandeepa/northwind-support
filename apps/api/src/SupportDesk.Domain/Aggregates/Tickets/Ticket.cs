@@ -131,4 +131,45 @@ public sealed class Ticket : AggregateRoot
         DueAtUtc = dueAtUtc;
         UpdatedAtUtc = startedAtUtc;
     }
+
+    /// <summary>The priority an escalation would give this ticket: one level up.</summary>
+    /// <exception cref="BusinessRuleViolationException">
+    /// The ticket is Resolved or Closed, or already Critical.
+    /// </exception>
+    public TicketPriority NextEscalationPriority()
+    {
+        if (!IsOpen)
+        {
+            throw new BusinessRuleViolationException($"Ticket {Reference} is {Status} and cannot be escalated.");
+        }
+
+        if (Priority == TicketPriority.Critical)
+        {
+            throw new BusinessRuleViolationException($"Ticket {Reference} is already Critical and cannot be escalated.");
+        }
+
+        return Priority + 1;
+    }
+
+    /// <summary>
+    /// Raises the priority one level, restarts the SLA window from now and hands the ticket to
+    /// <paramref name="agentId"/>. Returns the history row that records the change. The due date
+    /// and the agent are worked out by the caller, which can see customers and agents.
+    /// </summary>
+    /// <exception cref="BusinessRuleViolationException">The ticket cannot be escalated.</exception>
+    public TicketEscalation Escalate(
+        DateTime dueAtUtc, int? agentId, string reason, string escalatedBy, DateTime nowUtc)
+    {
+        var newPriority = NextEscalationPriority();
+
+        var escalation = new TicketEscalation(
+            Id, Priority, newPriority, AssignedAgentId, agentId, DueAtUtc, dueAtUtc, reason, escalatedBy, nowUtc);
+
+        Priority = newPriority;
+        StartSla(nowUtc, dueAtUtc);
+        AssignTo(agentId, nowUtc);
+
+        return escalation;
+    }
 }
+

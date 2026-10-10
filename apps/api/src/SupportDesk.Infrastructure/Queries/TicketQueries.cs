@@ -102,7 +102,38 @@ public sealed class TicketQueries(SupportDbContext db, IClock clock) : ITicketQu
                 DueAtUtc = x.Ticket.DueAtUtc,
                 ResolvedAtUtc = x.Ticket.ResolvedAtUtc,
                 SlaStatus = SlaEvaluator.Evaluate(x.Ticket.DueAtUtc, x.Ticket.ResolvedAtUtc, now)
+
             })
+            .ToListAsync(ct);
+
+    }
+        public async Task<IReadOnlyList<EscalationDto>?> GetEscalationsAsync(int ticketId, CancellationToken ct)
+    {
+        if (!await db.Set<Ticket>().AsNoTracking().AnyAsync(t => t.Id == ticketId, ct))
+        {
+            return null;
+        }
+
+        // One query, with both agents joined in; the index on (TicketId, EscalatedAtUtc DESC) serves it.
+        return await (
+                from escalation in db.Set<TicketEscalation>().AsNoTracking()
+                where escalation.TicketId == ticketId
+                from fromAgent in db.Set<Agent>().Where(a => a.Id == escalation.FromAgentId).DefaultIfEmpty()
+                from toAgent in db.Set<Agent>().Where(a => a.Id == escalation.ToAgentId).DefaultIfEmpty()
+                orderby escalation.EscalatedAtUtc descending, escalation.Id descending
+                select new EscalationDto
+                {
+                    Id = escalation.Id,
+                    FromPriority = escalation.FromPriority,
+                    ToPriority = escalation.ToPriority,
+                    FromAgent = fromAgent == null ? null : new AgentSummaryDto(fromAgent.Id, fromAgent.FullName),
+                    ToAgent = toAgent == null ? null : new AgentSummaryDto(toAgent.Id, toAgent.FullName),
+                    FromDueAtUtc = escalation.FromDueAtUtc,
+                    ToDueAtUtc = escalation.ToDueAtUtc,
+                    Reason = escalation.Reason,
+                    EscalatedBy = escalation.EscalatedBy,
+                    EscalatedAtUtc = escalation.EscalatedAtUtc
+                })
             .ToListAsync(ct);
     }
 

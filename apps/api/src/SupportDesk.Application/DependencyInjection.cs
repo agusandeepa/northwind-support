@@ -10,7 +10,8 @@ using SupportDesk.Application.Features.Tickets.Commands.RaiseTicket;
 using SupportDesk.Application.Features.Tickets.Queries.GetTicket;
 using SupportDesk.Application.Features.Tickets.Queries.SearchTickets;
 using SupportDesk.Application.Triage;
-
+using SupportDesk.Application.Features.Tickets.Commands.EscalateTicket;
+using SupportDesk.Application.Features.Tickets.Queries.GetEscalations;
 /// <summary>
 /// Registers the command and query handlers and the request validators.
 /// </summary>
@@ -35,6 +36,8 @@ public static class DependencyInjection
                 services.AddSingleton<SlaCalculator>();
         services.AddSingleton<AgentSelector>();
         services.AddSingleton<TicketTriage>();
+                services.AddScoped<EscalateTicketCommandHandler>();
+        services.AddScoped<GetEscalationsQueryHandler>();
 
         return services;
     }

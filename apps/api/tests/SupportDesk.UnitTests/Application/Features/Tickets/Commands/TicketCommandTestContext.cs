@@ -12,6 +12,8 @@ using SupportDesk.Domain.Aggregates.Customers;
 using SupportDesk.Domain.Aggregates.Tickets;
 using SupportDesk.Domain.Repositories;
 using SupportDesk.UnitTests.TestDoubles;
+using SupportDesk.Application.Features.Tickets.Commands.EscalateTicket;
+using SupportDesk.Application.Features.Tickets.Queries.GetEscalations;
 
 namespace SupportDesk.UnitTests.Application.Features.Tickets.Commands;
 
@@ -56,6 +58,18 @@ internal sealed class TicketCommandTestContext
         AssignTicket = new AssignTicketCommandHandler(
             Tickets.Object, Agents.Object, UnitOfWork.Object, Clock, getTicket,
             NullLogger<AssignTicketCommandHandler>.Instance);
+
+        Tickets.Setup(t => t.AddEscalationAsync(It.IsAny<TicketEscalation>(), It.IsAny<CancellationToken>()))
+            .Callback<TicketEscalation, CancellationToken>((escalation, _) => AddedEscalation = escalation)
+            .Returns(Task.CompletedTask);
+
+        TicketQueries.Setup(q => q.GetEscalationsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<EscalationDto> { new() });
+
+        EscalateTicket = new EscalateTicketCommandHandler(
+            Tickets.Object, Customers.Object, Categories.Object, Agents.Object, triage, UnitOfWork.Object,
+            Clock, getTicket, new GetEscalationsQueryHandler(TicketQueries.Object),
+            NullLogger<EscalateTicketCommandHandler>.Instance);
     }
 
     public Mock<ITicketRepository> Tickets { get; } = new();
@@ -105,8 +119,13 @@ internal sealed class TicketCommandTestContext
         Tickets.Setup(t => t.GetByIdAsync(ticket.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(ticket);
 
+
         return ticket;
     }
+        public EscalateTicketCommandHandler EscalateTicket { get; }
+
+    /// <summary>The history row handed to the repository by the last escalate call.</summary>
+    public TicketEscalation? AddedEscalation { get; private set; }
 
     public void ExistingAgent(int id, string fullName = "Alex Turner", bool isActive = true)
     {
