@@ -36,6 +36,9 @@ public sealed record TicketQuery
     /// <summary>When true, only tickets without an assigned agent.</summary>
     public bool UnassignedOnly { get; init; }
 
+    /// <summary>Only tickets in this SLA state, as of now.</summary>
+    public SlaStatus? SlaStatus { get; init; }
+
     /// <summary>createdAtUtc | updatedAtUtc | dueAtUtc | priority | status.</summary>
     public string SortBy { get; init; } = "createdAtUtc";
 
