@@ -40,6 +40,12 @@ public sealed class Ticket : AggregateRoot
 
     public DateTime UpdatedAtUtc { get; private set; }
 
+    /// <summary>
+    /// When the current SLA window started: the creation time, or the last escalation. The
+    /// window runs from here to <see cref="DueAtUtc"/>.
+    /// </summary>
+    public DateTime SlaStartedAtUtc { get; private set; }
+
     /// <summary>When the team has committed to responding by. Null when no SLA applies.</summary>
     public DateTime? DueAtUtc { get; private set; }
 
@@ -75,7 +81,8 @@ public sealed class Ticket : AggregateRoot
             Priority = priority,
             Status = TicketStatus.New,
             CreatedAtUtc = nowUtc,
-            UpdatedAtUtc = nowUtc
+            UpdatedAtUtc = nowUtc,
+            SlaStartedAtUtc = nowUtc
         };
     }
 
@@ -110,5 +117,18 @@ public sealed class Ticket : AggregateRoot
     {
         AssignedAgentId = agentId;
         UpdatedAtUtc = nowUtc;
+    }
+
+    /// <summary>
+    /// Starts (or restarts) the SLA clock: the window runs from <paramref name="startedAtUtc"/>
+    /// to <paramref name="dueAtUtc"/>.
+    /// </summary>
+    public void StartSla(DateTime startedAtUtc, DateTime dueAtUtc)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(dueAtUtc, startedAtUtc);
+
+        SlaStartedAtUtc = startedAtUtc;
+        DueAtUtc = dueAtUtc;
+        UpdatedAtUtc = startedAtUtc;
     }
 }
