@@ -5,7 +5,7 @@ namespace SupportDesk.Application.Contracts.Tickets;
 /// <summary>
 /// A single ticket, with the description and contact details the detail screen shows.
 /// </summary>
-public sealed class TicketDetailDto
+public class TicketDetailDto
 {
     public int Id { get; set; }
 

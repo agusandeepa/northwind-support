@@ -8,4 +8,7 @@ namespace SupportDesk.Domain.Repositories;
 public interface IAgentRepository
 {
     Task<Agent?> GetByIdAsync(int id, CancellationToken ct);
+
+    /// <summary>Every agent, with the number of open tickets each one holds.</summary>
+    Task<IReadOnlyList<AgentWorkload>> GetWorkloadsAsync(CancellationToken ct);
 }

@@ -7,19 +7,8 @@ namespace SupportDesk.UnitTests.Application.Triage;
 
 public class SlaCalculatorTests
 {
-    private static SlaOptions Options(double multiplier = 0.5, double minimumHours = 1) => new()
-    {
-        BaseWindowHours = new Dictionary<TicketPriority, double>
-        {
-            [TicketPriority.Low] = 72,
-            [TicketPriority.Medium] = 24,
-            [TicketPriority.High] = 8,
-            [TicketPriority.Critical] = 4
-        },
-        PremiumCustomerMultiplier = multiplier,
-        MinimumWindowHours = minimumHours,
-        AtRiskThresholdPercent = 25
-    };
+    private static SlaOptions Options(double multiplier = 0.5, double minimumHours = 1) =>
+        TestSlaOptions.Create(multiplier, minimumHours);
 
     [Theory]
     [InlineData(TicketPriority.Low, 72.0)]

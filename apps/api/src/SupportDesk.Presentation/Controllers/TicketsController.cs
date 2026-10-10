@@ -28,8 +28,7 @@ public sealed class TicketsController : ControllerBase
         handler.HandleAsync(id, ct);
 
     /// <summary>Raises a new ticket.</summary>
-    [HttpPost]
-    public async Task<ActionResult<TicketDetailDto>> Create(
+    [HttpPost]    public async Task<ActionResult<TicketCreatedDto>> Create(
         CreateTicketRequest request,
         [FromServices] RaiseTicketCommandHandler handler,
         CancellationToken ct)

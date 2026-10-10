@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using SupportDesk.Application;
+using SupportDesk.Application.Triage;
 using SupportDesk.Infrastructure;
 using SupportDesk.Presentation.Extensions;
 using SupportDesk.Presentation.Filters;
@@ -28,6 +29,12 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddApplication();
+
+// The SLA rules come from configuration, and a bad configuration stops the app at startup.
+builder.Services.AddSingleton(
+    (builder.Configuration.GetSection(SlaOptions.SectionName).Get<SlaOptions>()
+        ?? throw new InvalidOperationException($"Configuration section '{SlaOptions.SectionName}' is missing."))
+    .EnsureValid());
 builder.Services.AddInfrastructure(builder.Configuration);
 
 var app = builder.Build();

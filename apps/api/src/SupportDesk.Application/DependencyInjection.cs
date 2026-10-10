@@ -9,8 +9,7 @@ using SupportDesk.Application.Features.Tickets.Commands.ChangeTicketStatus;
 using SupportDesk.Application.Features.Tickets.Commands.RaiseTicket;
 using SupportDesk.Application.Features.Tickets.Queries.GetTicket;
 using SupportDesk.Application.Features.Tickets.Queries.SearchTickets;
-
-namespace SupportDesk.Application;
+using SupportDesk.Application.Triage;
 
 /// <summary>
 /// Registers the command and query handlers and the request validators.
@@ -33,6 +32,9 @@ public static class DependencyInjection
         services.AddScoped<GetCategoriesQueryHandler>();
 
         services.AddValidatorsFromAssemblyContaining<RaiseTicketCommandHandler>(ServiceLifetime.Singleton);
+                services.AddSingleton<SlaCalculator>();
+        services.AddSingleton<AgentSelector>();
+        services.AddSingleton<TicketTriage>();
 
         return services;
     }

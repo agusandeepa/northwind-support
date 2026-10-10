@@ -5,7 +5,9 @@ using SupportDesk.Application.Features.Tickets.Commands.AssignTicket;
 using SupportDesk.Application.Features.Tickets.Commands.ChangeTicketStatus;
 using SupportDesk.Application.Features.Tickets.Commands.RaiseTicket;
 using SupportDesk.Application.Features.Tickets.Queries.GetTicket;
+using SupportDesk.Application.Triage;
 using SupportDesk.Domain.Aggregates.Agents;
+using SupportDesk.Domain.Aggregates.Categories;
 using SupportDesk.Domain.Aggregates.Customers;
 using SupportDesk.Domain.Aggregates.Tickets;
 using SupportDesk.Domain.Repositories;
@@ -21,11 +23,9 @@ internal sealed class TicketCommandTestContext
 {
     public TicketCommandTestContext()
     {
-        Customers.Setup(c => c.ExistsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-
-        Categories.Setup(c => c.ExistsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+        ExistingCustomer(CustomerTier.Standard);
+        ExistingCategory();
+        WithWorkloads();
 
         Tickets.Setup(t => t.NextReferenceAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync("TCK-0041");
@@ -45,10 +45,11 @@ internal sealed class TicketCommandTestContext
             });
 
         var getTicket = new GetTicketQueryHandler(TicketQueries.Object);
+        var triage = new TicketTriage(new SlaCalculator(TestSlaOptions.Create()), new AgentSelector());
 
         RaiseTicket = new RaiseTicketCommandHandler(
-            Tickets.Object, Customers.Object, Categories.Object, UnitOfWork.Object, Clock, getTicket,
-            NullLogger<RaiseTicketCommandHandler>.Instance);
+            Tickets.Object, Customers.Object, Categories.Object, Agents.Object, triage, UnitOfWork.Object,
+            Clock, getTicket, NullLogger<RaiseTicketCommandHandler>.Instance);
 
         ChangeTicketStatus = new ChangeTicketStatusCommandHandler(Tickets.Object, UnitOfWork.Object, Clock, getTicket);
 
@@ -79,6 +80,24 @@ internal sealed class TicketCommandTestContext
 
     /// <summary>The ticket handed to the repository by the last create call.</summary>
     public Ticket? AddedTicket { get; private set; }
+
+    /// <summary>Every customer id resolves to a customer of this tier.</summary>
+    public void ExistingCustomer(CustomerTier tier) =>
+        Customers.Setup(c => c.GetByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((int id, CancellationToken _) =>
+                new Customer("Contoso Ltd", "support@contoso.example", null, tier, Clock.UtcNow).WithId(id));
+
+    /// <summary>Every category id resolves to a category with these rules.</summary>
+    public void ExistingCategory(
+        string name = "General", bool requiresSpecialist = false, bool forcesCriticalPriority = false) =>
+        Categories.Setup(c => c.GetByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((int id, CancellationToken _) =>
+                new Category(name, requiresSpecialist, forcesCriticalPriority).WithId(id));
+
+    /// <summary>The agents, and their open ticket counts, that triage gets to choose from.</summary>
+    public void WithWorkloads(params AgentWorkload[] workloads) =>
+        Agents.Setup(a => a.GetWorkloadsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(workloads);
 
     /// <summary>Makes <see cref="ITicketRepository.GetByIdAsync"/> return this ticket.</summary>
     public Ticket ExistingTicket(Ticket ticket)

@@ -3,8 +3,6 @@ using SupportDesk.Domain.Aggregates.Categories;
 
 namespace SupportDesk.Application.Triage;
 
-/// <summary>An agent and how many open tickets they hold right now.</summary>
-public sealed record AgentWorkload(Agent Agent, int OpenTickets);
 
 /// <summary>Who a ticket goes to (null for nobody) and why.</summary>
 public sealed record Assignment(Agent? Agent, string Reason);

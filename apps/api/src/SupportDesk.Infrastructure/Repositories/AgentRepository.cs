@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SupportDesk.Domain.Aggregates.Agents;
+using SupportDesk.Domain.Aggregates.Tickets;
 using SupportDesk.Domain.Repositories;
 using SupportDesk.Infrastructure.Data;
 
@@ -12,4 +13,26 @@ public sealed class AgentRepository(SupportDbContext db) : IAgentRepository
         db.Set<Agent>()
             .Include(a => a.Specializations)
             .FirstOrDefaultAsync(a => a.Id == id, ct);
+
+    /// <summary>Two queries however many agents there are: the agents, then one count per agent.</summary>
+    public async Task<IReadOnlyList<AgentWorkload>> GetWorkloadsAsync(CancellationToken ct)
+    {
+        var agents = await db.Set<Agent>()
+            .AsNoTracking()
+            .Include(a => a.Specializations)
+            .ToListAsync(ct);
+
+        var openByAgent = await db.Set<Ticket>()
+            .AsNoTracking()
+            .Where(t => t.AssignedAgentId != null
+                        && t.Status != TicketStatus.Resolved
+                        && t.Status != TicketStatus.Closed)
+            .GroupBy(t => t.AssignedAgentId)
+            .Select(g => new { AgentId = g.Key!.Value, Count = g.Count() })
+            .ToDictionaryAsync(x => x.AgentId, x => x.Count, ct);
+
+        return agents
+            .Select(a => new AgentWorkload(a, openByAgent.GetValueOrDefault(a.Id)))
+            .ToList();
+    }
 }

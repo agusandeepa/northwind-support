@@ -20,4 +20,35 @@ public sealed class SlaOptions
 
     /// <summary>A ticket is at risk once this percentage of its window or less remains.</summary>
     public int AtRiskThresholdPercent { get; set; }
+
+    /// <summary>Fails at startup, rather than on the first ticket, when the configuration is unusable.</summary>
+    /// <exception cref="InvalidOperationException">A value is missing or out of range.</exception>
+    public SlaOptions EnsureValid()
+    {
+        foreach (var priority in Enum.GetValues<TicketPriority>())
+        {
+            if (!BaseWindowHours.TryGetValue(priority, out var hours) || hours <= 0)
+            {
+                throw new InvalidOperationException(
+                    $"{SectionName}:BaseWindowHours:{priority} must be a positive number of hours.");
+            }
+        }
+
+        if (PremiumCustomerMultiplier is <= 0 or > 1)
+        {
+            throw new InvalidOperationException($"{SectionName}:PremiumCustomerMultiplier must be above 0 and at most 1.");
+        }
+
+        if (MinimumWindowHours < 0)
+        {
+            throw new InvalidOperationException($"{SectionName}:MinimumWindowHours cannot be negative.");
+        }
+
+        if (AtRiskThresholdPercent is < 0 or > 100)
+        {
+            throw new InvalidOperationException($"{SectionName}:AtRiskThresholdPercent must be between 0 and 100.");
+        }
+
+        return this;
+    }
 }
