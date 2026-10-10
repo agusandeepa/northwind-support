@@ -1,3 +1,4 @@
+using SupportDesk.Domain.Aggregates.Tickets;
 using SupportDesk.Domain.Common;
 
 namespace SupportDesk.Domain.Aggregates.Categories;
@@ -39,4 +40,11 @@ public sealed class Category : AggregateRoot
     /// reporter asked for.
     /// </summary>
     public bool ForcesCriticalPriority { get; private set; }
+
+    /// <summary>
+    /// The priority a ticket in this category gets: Critical when the category forces it,
+    /// otherwise what was requested, or Medium when nothing was requested.
+    /// </summary>
+    public TicketPriority ResolvePriority(TicketPriority? requested) =>
+        ForcesCriticalPriority ? TicketPriority.Critical : requested ?? TicketPriority.Medium;
 }

@@ -1,3 +1,4 @@
+using SupportDesk.Domain.Aggregates.Categories;
 using SupportDesk.Domain.Common;
 
 namespace SupportDesk.Domain.Aggregates.Agents;
@@ -42,10 +43,22 @@ public sealed class Agent : AggregateRoot
     /// <summary>The ticket categories this agent is qualified for.</summary>
     public IReadOnlyCollection<AgentSpecialization> Specializations => _specializations;
 
+    public bool HasSpecialization(int categoryId) => _specializations.Any(s => s.CategoryId == categoryId);
+
+    /// <summary>
+    /// Whether this agent can take one more ticket of the category while holding
+    /// <paramref name="openTickets"/>: they must be active, strictly below their limit, and
+    /// specialised when the category demands it.
+    /// </summary>
+    public bool CanTake(Category category, int openTickets) =>
+        IsActive
+        && openTickets < MaxOpenTickets
+        && (!category.RequiresSpecialist || HasSpecialization(category.Id));
+
     /// <summary>Records that the agent is qualified for a category. Adding one twice is a no-op.</summary>
     public void AddSpecialization(int categoryId)
     {
-        if (_specializations.Any(s => s.CategoryId == categoryId))
+        if (HasSpecialization(categoryId))
         {
             return;
         }
