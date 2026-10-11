@@ -191,7 +191,7 @@ The `/health` endpoint checks database reachability and is available without aut
 
 ### Docker Verification Evidence
 
-![Docker verification](docs/screenshots/doker.png)
+![Docker verification](docs/screenshots/docker.png)
 
 Before submission, verify the following commands against the actual environment:
 
@@ -204,7 +204,6 @@ docker images
 
 Confirm that the API becomes healthy, seeded tickets are available, and the runtime user is not `root`. Compare the SDK/build image size with the final runtime image size and record the actual values. Modify a `.cs` file and rebuild to check whether the restore layer is reused from cache.
 
-![Docker verification](docs/screenshots/doker.png)
 
 ### Image Size Comparison
 
