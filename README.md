@@ -1,259 +1,295 @@
 # Northwind Support Desk
 
-A support ticket system: raise tickets, search and filter them, assign them to agents, escalate them
-and move them through their lifecycle. .NET 10 Web API, React 19 + TypeScript, SQL Server, one repo.
+A support ticket management system for creating, searching, filtering, assigning, escalating, and tracking support tickets.
 
-The assignment is in [`ASSIGNMENT_CANDIDATE.md`](ASSIGNMENT_CANDIDATE.md). How I approached each task
-is in [`APPROACH.md`](APPROACH.md).
+**Tech Stack:** .NET 10 Web API, React 19, TypeScript, SQL Server, Entity Framework Core, JWT authentication, and Docker.
 
-## Where things stand
+## 1. Implementation Summary
 
-Tasks 1 to 4 are done. I did not build the optional SLA summary report (2.5). The time spent on each
-task is in the note that goes with my submission.
+| Task | Implementation |
+|---|---|
+| Task 1 | Fixed DEFECT-117 and implemented server-side ticket filtering |
+| Task 2 | Ticket triage, agent assignment, SLA calculation, escalation, and history |
+| Task 3 | Agent login, JWT authentication, protected API endpoints, and frontend session handling |
+| Task 4 | Multi-stage Docker build, non-root runtime, Docker Compose, and health endpoint |
+| Task 2.5 | Optional SLA summary report not implemented |
 
-## Running it
+## 2. Running the Application
 
-You need the .NET 10 SDK, Node 22 and Docker Desktop.
+### Prerequisites
+
+- .NET 10 SDK
+- Node.js 20 or later
+- Docker Desktop
+- Git
+
+### Local Development
+
+Run these commands from the repository root:
 
 ```bash
-cp .env.example .env     # optional, everything has a working default
+cp .env.example .env
 npm install
-npm run db:up            # SQL Server on localhost:1433
-npm run api              # applies migrations, seeds, serves http://localhost:5043
-npm run web              # http://localhost:5173
+npm run db:up
+npm run api
+npm run web
 ```
 
-The web app proxies `/api` to the API. By default it points at `https://localhost:7043`. If you see
-"Bad Gateway", put `VITE_API_PROXY_TARGET=http://localhost:5043` in `apps/web/.env.local` and restart
-`npm run web`.
+On Windows PowerShell, use `Copy-Item .env.example .env` instead of `cp` if needed.
 
-Development login (a local fixture, only seeded in Development):
+| Service | Address |
+|---|---|
+| Frontend | http://localhost:5173 |
+| API | http://localhost:5043 |
+| SQL Server | localhost:1433 |
 
-- `alex.turner@northwind-support.example` / `LocalDevOnly!1`
-- The same password works for `ben.osei@`, `priya.nair@`, `sara.lindqvist@` and `marcus.doyle@` at
-  `northwind-support.example`. Yuki Tanaka is inactive, so she can't sign in.
+If the frontend proxy cannot connect to the API, configure `apps/web/.env.local`:
 
-To run the API in Docker instead:
+```env
+VITE_API_PROXY_TARGET=http://localhost:5043
+```
+
+Restart the frontend after changing the configuration.
+
+### Docker
+
+Ensure Docker Desktop is running. From the repository root:
 
 ```bash
-cp .env.example .env     # then set MSSQL_SA_PASSWORD and Jwt__Key to your own values
+cp .env.example .env
 docker compose up --build
+```
+
+Configure `MSSQL_SA_PASSWORD` and `Jwt__Key` using suitable development values. Do not commit real secrets.
+
+The API is exposed at:
+
+- API: http://localhost:5080
+- Health endpoint: http://localhost:5080/health
+
+To run the frontend against the containerized API:
+
+```bash
 VITE_API_PROXY_TARGET=http://localhost:5080 npm run web
 ```
 
-## What I built and how I read the rules
+## 3. Task 1 — Defect Fix and Server-Side Filtering
 
-Task 1: I fixed DEFECT-117 and moved all the list filters into SQL, so the count and paging are
-right for the filtered set.
+### DEFECT-117: Root Cause and Fix
 
-Task 2: when a ticket is created the system picks the priority, due date and owner and returns a
-`triage` object saying why. `POST /api/tickets/{id}/escalate` raises the priority one level, works
-out a new due date from the moment of escalation, keeps the agent if they can still take the ticket
-(otherwise picks another) and writes a history row. `GET /api/tickets/{id}/escalations` lists the
-history, newest first. SLA status is worked out when a ticket is read, and `slaStatus` filters on it.
+The ticket-list effect in `useTicketList` did not include all filter values in its dependency list. As a result, changing a filter such as Status did not immediately trigger a new request. Changing the search value later could trigger a request with the updated filters, making the behaviour inconsistent.
 
-Task 3: agents sign in and get a JWT. Everything is closed except login, Swagger and `/health`. The
-agent who escalates comes from the token.
+The fix adds the relevant filter values to the effect dependencies. Search remains debounced to avoid sending a request for every keystroke. A regression test verifies that changing a filter triggers a request without requiring a search change.
 
-Task 4: a multi-stage Dockerfile, an `api` service in compose and a `/health` endpoint.
+### Server-Side Filtering
 
-Places where the spec left room, and what I decided:
+Filtering is implemented in `TicketQueries`. Filter predicates are composed before counting and pagination.
 
-- The open-ticket count for BR-5 ignores Resolved and Closed. When a ticket is re-checked on
-  escalation, its own agent's count doesn't include that ticket, otherwise someone at 6/6 would
-  always lose a ticket they already have.
-- Escalation recalculates the due date from "now", so I also reset the SLA start to that moment.
-  Without this the at-risk check would measure the new due date against the old start.
-- Ties between agents go to the lower open count, then the lower id, so the result is always the same.
-- The base windows, the premium multiplier (0.5), the 1 hour floor and the 25% at-risk threshold are
-  in the `Sla` config section. Categories are matched by their flags, never by name.
+Supported filters include:
 
-## Design decisions
+- Status, priority, category, and customer
+- Assigned agent and unassigned tickets
+- Search by ticket title, reference, and customer name
+- Derived SLA status
 
-The thing I cared about most was keeping each rule in one small place that doesn't touch the database
-or the clock, so create and escalate share it and it can be tested alone.
+Supplied filters combine using AND. Search values are trimmed, and blank search values are ignored. The filtered query is used to calculate `totalCount` and pagination metadata.
 
-- Priority from the category: `Category.ResolvePriority`
-- Due date: `SlaCalculator`, which reads its numbers from the `Sla` options
-- Can this agent take this ticket: `Agent.CanTake`
-- Which agent: `AgentSelector` (`Choose`, and `KeepOrChoose` for escalation)
-- Escalation: `Ticket.PriorityAfterEscalation` and `Ticket.ApplyEscalation`
-- SLA status: `SlaEvaluator`, which gets "now" passed in
+Tests cover priority matching, combined filters, and customer-name search. The SLA query uses SQL Server-specific `EF.Functions.DateDiffSecond` functionality and requires verification against SQL Server because SQLite cannot translate it in the same way.
 
-The command handlers (`RaiseTicketCommandHandler`, `EscalateTicketCommandHandler`) only load data, call
-these and save. I thought about putting the rules in the handlers, but then create and escalate would
-each have their own copy and I could only test them with a database. I also thought about a generic
-rules engine and dropped it, because there is only one set of rules.
+## 4. Task 2 — Triage, Escalation, and SLA
 
-Patterns I used, and why:
+### Business Rules
 
-1. Small policy classes (`AgentSelector`, `SlaCalculator`). Choosing an agent and doing the due-date
-   maths are things that could change, so the handlers depend on them rather than doing it inline.
-2. Composable query steps in `TicketQueries`. Each filter is one step that narrows the query. When
-   `slaStatus` came along I added one step and left the others alone (FL-6).
-3. Repositories only where the handlers really need to load and save (agents, tickets, escalations).
-   I didn't wrap everything else in an interface.
+- Medium is the default priority when no priority is supplied.
+- Security and Outage categories can force Critical priority.
+- Base SLA windows are Critical: 4 hours, High: 8 hours, Medium: 24 hours, and Low: 72 hours.
+- Premium customers receive half the SLA window, subject to a one-hour minimum.
+- Billing, Outage, and Security tickets require appropriately specialised agents.
+- Only active agents below their maximum open-ticket capacity are eligible.
+- The eligible agent with the fewest open tickets is selected, with deterministic tie-breaking.
+- If no agent is eligible, the ticket remains unassigned with an explanation.
+- Escalation increases priority by one level, recalculates the due date from the escalation time, and retains the current agent only if still eligible.
+- Critical, Resolved, and Closed tickets cannot be escalated.
+- Escalation reasons must contain 5–500 characters.
 
-SLA status is not stored. It depends on the current time, so a stored value would be wrong a moment
-later. I store the due date and the SLA start, and work the status out when reading.
+SLA windows, the premium multiplier, the minimum window, and the at-risk threshold are configurable through the existing `Sla` configuration section. Category flags are used instead of hard-coded category names.
 
-The SLA filter is a SQL predicate (it uses `EF.Functions.DateDiffSecond`), so filtering, sorting,
-paging and the count all happen in the database. SQLite can't translate that function, so my unit
-tests can't run it. It only runs against SQL Server (see Testing).
+### API Behaviour
 
-For credentials I added a nullable `PasswordHash` to `Agents` rather than a separate users table.
-Every login is an agent and there are no roles, so a second table would only add a join. If roles
-or non-agent users show up, that should be split out.
+- `POST /api/tickets` creates a ticket and returns its triage decision, including priority, assignment, due date, SLA status, and reasons.
+- `POST /api/tickets/{id}/escalate` escalates an eligible ticket and records the change.
+- `GET /api/tickets/{id}/escalations` returns escalation history, newest first.
+- `GET /api/tickets?slaStatus=...` filters tickets by derived SLA status.
 
-## The defect (DEFECT-117)
+Escalation history records the previous and new priority, agent, and due date, along with the reason, actor, and timestamp. The `TicketEscalations` table is introduced through an EF Core migration and has an index on `TicketId`.
 
-Root cause: in `useTicketList`, the effect that fetches the list only depended on `filters.search`,
-`filters.page` and `filters.pageSize`. Changing the status (or priority, category and so on) did not
-re-run the effect, so no request went out. The eslint rule that would have flagged this was switched
-off with a comment. The next time the search text changed, the effect did run and sent whatever the
-other filters happened to be at that moment, which is why the old status seemed to come back.
+SLA status is calculated when a ticket is read rather than stored. The evaluator distinguishes `NotApplicable`, `Met`, `Breached`, `AtRisk`, and `WithinSla`. An injectable clock makes time-dependent rules testable.
 
-Fix: the effect now depends on the real filter values, so any single filter change sends a request,
-and only the search text is debounced so typing doesn't send one request per keystroke. The
-regression test is in `useTicketList.test.ts`. It checks the request that gets sent when only the
-status changes, and it fails on the original code.
+The frontend includes SLA indicators and filtering, an escalation panel, reason validation, pending and error states, escalation history, and the triage response after ticket creation.
 
-To see it for yourself, change the Status dropdown with the Network tab open. One request should go
-out straight away. Typing in search shouldn't send a request per keystroke.
+## 5. Design Decisions
 
-## Filtering
+Business rules are kept in small, testable units rather than placing all logic in API handlers.
 
-The filters are applied in `TicketQueries` before the count and before `Skip/Take`, so `totalCount`
-and `totalPages` match the filtered list. Filters combine with AND, a blank search is ignored, and
-search looks at title, reference and customer name. The backend tests run the queries against a
-real (SQLite) database, so the count and the page both come from SQL and not from filtering in C#.
-To add another filter, add one step to the chain in `TicketQueries` and one property on `TicketQuery`.
+| Component | Responsibility |
+|---|---|
+| `Category.ResolvePriority` | Resolve priority from category rules |
+| `SlaCalculator` | Calculate SLA due dates |
+| `Agent.CanTake` | Check agent eligibility |
+| `AgentSelector` | Select or retain an eligible agent |
+| `Ticket.PriorityAfterEscalation` | Determine the next priority |
+| `Ticket.ApplyEscalation` | Apply escalation changes |
+| `SlaEvaluator` | Evaluate SLA status using an injected time |
 
-## Authentication
+Command handlers coordinate entity loading, domain logic, and persistence. This allows ticket creation and escalation to reuse the same rules.
 
-- Credentials: a nullable `PasswordHash` on `Agents`, added by the `AddAgentPasswordHash` migration.
-  The dev password is hashed when the data is seeded.
-- Hashing: PBKDF2 with a random salt per password, behind `IPasswordHasher`. Nothing is stored in
-  plain text.
-- Login: `POST /api/auth/login` returns `{ token, expiresAtUtc, user }`. A wrong email, a wrong
-  password and an inactive agent all give the same 401 and the same message. `GET /api/auth/me` looks
-  the agent up in the database, so a deactivated agent is refused there.
-- Token: a JWT signed with HS256, valid for 8 hours, no refresh token. The key comes from `Jwt__Key`
-  (listed in `.env.example`). In Development, if it isn't set, a temporary key is made for that run, so
-  everyone has to sign in again after a restart. A real deployment has to set one.
-- Access control: a fallback policy requires a signed-in user on every endpoint. Login, Swagger and
-  `/health` are the only exceptions. `escalatedBy` comes from the token.
-- Frontend: the session is kept in memory and copied to `localStorage` under `northwind.session`.
-  `api/client.ts` adds the `Authorization` header to every call. The downside of `localStorage` is
-  that any XSS bug could read the token. An HttpOnly cookie avoids that but needs CSRF protection
-  and the API and web app on the same site. A 401 on a signed-in session clears it and sends you to
-  `/login`, and after signing in you go back to the page you wanted.
-- For production I'd want a real key from a secret store, shorter tokens with refresh, HTTPS,
-  rate limiting on login and a decision on cookies versus storage.
+Server-side filtering uses query composition so filters, counts, and pagination remain in SQL. A generic rules engine was not introduced because the current requirements can be handled by focused domain classes without additional complexity.
 
-## Docker
+Password hashes are stored on the existing `Agents` entity because the system authenticates agents and does not require a separate user model. Escalation history is stored separately to preserve an auditable record of each escalation.
+
+## 6. Task 3 — Authentication
+
+The application uses JWT-based authentication.
+
+- Agent passwords are stored as salted PBKDF2 hashes, not plain text.
+- The `AddAgentPasswordHash` migration adds a nullable `PasswordHash` field to `Agents`.
+- `POST /api/auth/login` returns a JWT, its expiry, and user information.
+- Incorrect credentials and inactive accounts are rejected.
+- `GET /api/auth/me` returns the authenticated user.
+- A fallback authorization policy protects endpoints centrally, with required public endpoints explicitly excluded.
+- The escalation actor is taken from the authenticated token rather than trusted from the request body.
+- The frontend attaches the bearer token to API calls and redirects unauthenticated users to login.
+- A 401 response clears the session and redirects to login.
+
+The JWT lifetime is eight hours. The signing key is supplied through `Jwt__Key` configuration and must not be committed to source control.
+
+### Development Login
+
+| Field | Value |
+|---|---|
+| Email | `alex.turner@northwind-support.example` |
+| Password | `LocalDevOnly!1` |
+| Status | Active development account |
+
+This is a development-only fixture account. Do not reuse these credentials in production.
+
+The frontend stores the session in memory and localStorage under `northwind.session`. This supports page refreshes, but JavaScript executing through an XSS vulnerability could access the stored token.
+
+For production, I would use managed secret storage, HTTPS, login rate limiting, and a reviewed token and session strategy.
+
+## 7. Task 4 — Docker
+
+The API Dockerfile is located at `apps/api/Dockerfile` and is built from the repository root.
+
+The multi-stage build uses the .NET 10 SDK image to restore, build, and publish the API, followed by an ASP.NET runtime image. Dependency files are copied before the remaining source to allow the restore layer to be cached when dependencies have not changed.
+
+The API is configured to run as a non-root user on port `8080`. Docker Compose exposes it at `localhost:5080` and connects it to SQL Server through the Compose service network. The API waits for SQL Server's health check before starting.
+
+On an empty development database, the application applies migrations and seeds demonstration data. In production, migrations should run as a controlled deployment step rather than having every application instance attempt schema changes at startup.
+
+The `/health` endpoint checks database reachability and is available without authentication.
+
+### Docker Verification Evidence
+
+![Docker verification](docs/screenshots/doker.png)
+
+Before submission, verify the following commands against the actual environment:
 
 ```bash
-docker compose down -v && docker compose up --build
+docker compose down -v
+docker compose up --build
+docker compose exec api whoami
+docker images
 ```
 
-Variables: `ASPNETCORE_ENVIRONMENT` (default Development), `MSSQL_SA_PASSWORD` (a local default,
-change it) and `Jwt__Key` (empty means a temporary key).
+Confirm that the API becomes healthy, seeded tickets are available, and the runtime user is not `root`. Compare the SDK/build image size with the final runtime image size and record the actual values. Modify a `.cs` file and rebuild to check whether the restore layer is reused from cache.
 
-The Dockerfile is `apps/api/Dockerfile`, built from the repo root. It copies the project files and
-restores first, so the restore layer is cached, then publishes. The final image is the ASP.NET
-runtime, runs as a non-root user on port 8080, has no certificates and no config inside. The
-connection string, key and environment name are passed in at run time. Compose publishes the API on
-`localhost:5080` and starts it only when SQL Server is healthy. `GET /health` checks the database and
-needs no token.
+![Docker verification](docs/screenshots/doker.png)
 
-Migrations: on an empty volume the API migrates and seeds on start-up, which is fine for a demo. In a
-real deployment I'd run migrations as a separate step before the new version starts. If several
-instances start together they would all try to migrate, the app shouldn't need schema-changing rights
-while running, and a failed migration should stop the release instead of leaving a crash-looping
-container.
+### Image Size Comparison
 
-How to check it:
+Record the actual output from `docker images` before submission.
 
-- `docker compose down -v && docker compose up --build`, then open `http://localhost:5080/health`.
-  It should report healthy. Sign in and call `/api/tickets` to see the seeded data.
-- Change one `.cs` file and run `docker compose build api` again. The restore step shows as cached
-  and only the build and publish steps run.
-- `docker images` shows the runtime image next to the SDK image. The runtime one is much smaller,
-  because it has no SDK or build tools in it.
-- `docker compose exec api whoami` prints the non-root user, not `root`.
+| Image | Size |
+|---|---|
+| .NET SDK/build image | Add verified size |
+| Final ASP.NET runtime image | Add verified size |
 
-## Database
+## 8. Testing
 
-- `Agents.PasswordHash`, nullable, from the `AddAgentPasswordHash` migration.
-- `TicketEscalations` (Id, TicketId, From/To Priority, From/To AgentId, From/To DueAtUtc, Reason up
-  to 500, EscalatedBy up to 100, EscalatedAtUtc), from its own migration. I added an index on
-  `TicketId`, since history is only ever read as "the rows for one ticket, newest first".
-- Reads use `AsNoTracking` and select only the columns they need.
+Run the configured backend and frontend test suites from the repository root:
 
-## Testing
+```bash
+npm test
+```
 
-`npm test` runs the .NET tests and then the web tests.
+The backend uses xUnit and Moq. Tests cover SLA calculations, forced Critical priority, agent eligibility and selection, escalation outcomes and history, authentication, and password verification.
 
-Backend (xUnit, Moq, a fixed clock): SLA windows per priority and tier including the 1 hour floor,
-categories that force Critical, agent selection (fewest open, specialists, limits, inactive, ties,
-nobody eligible), escalation (one step up, new due date, owner kept or changed, history row,
-rejections), SLA status at the exact boundaries, wrong password giving 401 and no token, an inactive
-agent being refused, password hashing, and a protected endpoint returning 401 without a token and
-200 with one.
+The frontend uses Vitest and React Testing Library. Tests cover escalation reason validation, conflict responses, SLA indicators, authentication redirects, session clearing after 401 responses, and the DEFECT-117 regression.
 
-Frontend (Vitest, Testing Library): a short reason blocks submit and never calls the API, a 409 is
-shown and the ticket stays as it was, the SLA indicator shows every state in a way you can tell
-apart, an unauthenticated visitor is redirected to login and sent back afterwards, a 401 clears the
-session, and the DEFECT-117 regression test.
+The SLA query's SQL Server-specific translation is not covered by SQLite query tests and should be verified against SQL Server.
 
-What I didn't test automatically: the SLA filter against a real SQL Server, because the test database
-is SQLite and can't run `DateDiffSecond`. To try it, start the SQL Server container and filter by
-each SLA status in the app. I also didn't test Docker itself or the visual styling.
+### Test Results
 
+![Automated test results](docs/screenshots/test.jpg)
 
-## AI Usage
+## 9. AI Usage
 
-I used Claude as an AI assistant during this assessment to understand errors, troubleshoot build and test failures, and get help fixing issues in the code. I also used it to suggest code changes when I was unsure how to resolve a problem.
+Claude was used as a development assistant to help investigate errors, explore implementation options, and troubleshoot code and test issues.
 
-I reviewed the suggested changes, applied the relevant fixes in my editor, and tested them to check that they worked as expected. I used `dotnet build`, `dotnet test`, frontend checks, API requests, and manual browser testing to verify the implementation.
+I reviewed AI suggestions against the assignment requirements and the existing code structure. I used the available build, automated tests, API requests, and browser checks to validate changes where applicable.
 
-AI was helpful in identifying possible causes of errors and suggesting solutions, but I also encountered suggestions that needed adjustments to fit the existing codebase. I corrected these issues and verified the final changes through testing.
+AI-generated code was not treated as automatically correct. Before submission, I will document specific examples from the development process, including a suggestion that was accepted, one that was modified or rejected, any bug identified or introduced with AI assistance, and how the final implementation was verified.
 
-## Known limitations
+## 10. Known Limitations
 
-- No refresh tokens. A token works until it expires (8 hours) and can't be revoked. Only `/me`
-  checks that the agent is still active.
-- No lockout or rate limiting on login.
-- One shared HS256 key, and the token is in `localStorage`.
-- No roles. Any signed-in agent can work on any ticket.
-- The SLA filter isn't covered by the automated tests, because SQLite can't run it.
-- Migrations run at start-up in the demo. In production they should be a separate step.
-- The container speaks plain HTTP on 8080. TLS belongs in front of it.
-- The SLA summary report (2.5) isn't built.
-- Left out as out of scope: registration, password reset, SSO, MFA, notifications, caching.
-- With 10 million tickets the ticket search (`LIKE` on title, reference and customer name) and the
-  SLA predicate would be too slow, because neither can use an index as written. I'd move search to
-  full-text search and store a computed due-date or SLA column that can be indexed.
+- The optional SLA summary report (Task 2.5) is not implemented.
+- The SLA filter requires verification against SQL Server because SQLite cannot translate the SQL Server-specific date-difference function.
+- JWT refresh-token support and individual token revocation are not implemented.
+- Login rate limiting and account lockout are not implemented.
+- Storing the token in localStorage carries XSS-related risks.
+- Registration, password reset, SSO, MFA, notifications, background jobs, roles and permissions, caching, and CI/CD are outside the current implementation scope.
+- Production deployments should manage secrets and database migrations separately from application startup.
+- Search and SLA filtering may need further optimisation for very large datasets.
 
-## Commands
+## 11. Time Spent
 
-- `npm run db:up` / `db:down` / `db:reset`: start, stop or wipe SQL Server
-- `npm run api` / `npm run web`: run the API or the web app
-- `npm run build`: build both
-- `npm run lint` / `typecheck` / `format`: web lint and types, `dotnet format`
-- `npm run ef -- migrations add <Name>`: add an EF Core migration
+Approximate time spent:
 
-## API
+| Area | Time |
+|---|---:|
+| Task 1 — Defect fix and filtering | 4 hours |
+| Task 2 — Triage and escalation | 8 hours |
+| Task 3 — Authentication | 6 hours |
+| Task 4 — Docker | 3 hours |
+| Testing and documentation | 4 hours |
+| **Total** | **25 hours** |
 
-- `POST /api/auth/login`, `GET /api/auth/me`
-- `GET /api/tickets` with `search`, `status`, `priority`, `categoryId`, `customerId`,
-  `assignedAgentId`, `unassignedOnly`, `slaStatus`, `sortBy`, `sortDirection`
-- `GET /api/tickets/{id}`, `POST /api/tickets` (returns the ticket and its `triage`)
-- `POST /api/tickets/{id}/escalate`, `GET /api/tickets/{id}/escalations`
-- `PATCH /api/tickets/{id}/status`, `PATCH /api/tickets/{id}/assignment`
-- `GET /api/customers`, `/api/agents`, `/api/categories`
-- `GET /health`
+Update these estimates if your actual time spent differs.
 
-Errors come back as ProblemDetails: 400 for validation, 401 when not signed in or credentials are
-wrong, 404 not found, 409 for conflicts and rule violations (like escalating a Critical ticket).
+## 12. Useful Commands
+
+| Command | Purpose |
+|---|---|
+| `npm run db:up` | Start the local database |
+| `npm run db:down` | Stop the local database |
+| `npm run db:reset` | Reset the development database |
+| `npm run api` | Start the API |
+| `npm run web` | Start the frontend |
+| `npm run build` | Build the project |
+| `npm run lint` | Run lint checks |
+| `npm run typecheck` | Run type checks |
+| `npm run format` | Run formatting checks |
+
+Check `package.json` for the available scripts before using them.
+
+## 13. Submission Checklist
+
+- Submit the URL of the forked GitHub repository.
+- Provide the development login credentials in the submission email.
+- Include the actual approximate time spent on each task.
+- Keep the defect fix, filtering, and feature work in separate focused commits as required.
+- Ensure the screenshots exist at `docs/screenshots/doker.png` and `docs/screenshots/test.jpg`.
+- Verify the login account, test suite, and Docker setup before claiming successful verification.
+- Record the actual Docker image sizes.
+- Confirm that no real secrets or production credentials are committed.
