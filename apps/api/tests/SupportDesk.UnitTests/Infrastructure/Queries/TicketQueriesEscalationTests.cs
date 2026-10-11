@@ -45,7 +45,7 @@ public sealed class TicketQueriesEscalationTests : IDisposable
     {
         using var db = _database.CreateContext();
 
-        var history = await new TicketQueries(db, new FixedClock()).GetEscalationsAsync(_ticketId, CancellationToken.None);
+        var history = await new TicketQueries(db, new FixedClock(), TestSlaOptions.Create()).GetEscalationsAsync(_ticketId, CancellationToken.None);
 
         Assert.NotNull(history);
         Assert.Equal(new[] { "Second", "First" }, history.Select(e => e.Reason).ToArray());
@@ -62,7 +62,7 @@ public sealed class TicketQueriesEscalationTests : IDisposable
     {
         using var db = _database.CreateContext();
 
-        Assert.Null(await new TicketQueries(db, new FixedClock()).GetEscalationsAsync(999, CancellationToken.None));
+        Assert.Null(await new TicketQueries(db, new FixedClock(), TestSlaOptions.Create()).GetEscalationsAsync(999, CancellationToken.None));
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public sealed class TicketQueriesEscalationTests : IDisposable
         db.Add(other);
         db.SaveChanges();
 
-        var history = await new TicketQueries(db, new FixedClock()).GetEscalationsAsync(other.Id, CancellationToken.None);
+        var history = await new TicketQueries(db, new FixedClock(), TestSlaOptions.Create()).GetEscalationsAsync(other.Id, CancellationToken.None);
 
         Assert.NotNull(history);
         Assert.Empty(history);

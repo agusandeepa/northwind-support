@@ -2,8 +2,8 @@ using SupportDesk.Domain.Aggregates.Tickets;
 
 namespace SupportDesk.Application.Contracts.Tickets;
 
-/// <summary>Body of POST /api/tickets/{id}/escalate.</summary>
-public sealed record EscalateTicketRequest(string Reason, string EscalatedBy);
+/// <summary>Body of POST /api/tickets/{id}/escalate. Who escalates comes from the token, not the body.</summary>
+public sealed record EscalateTicketRequest(string Reason);
 
 /// <summary>One row of a ticket's escalation history: before, after, who and why.</summary>
 public sealed class EscalationDto

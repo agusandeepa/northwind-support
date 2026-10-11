@@ -29,7 +29,7 @@ public sealed class EscalateTicketCommandHandler(
     /// <exception cref="SupportDesk.Domain.Exceptions.BusinessRuleViolationException">
     /// The ticket is Critical, Resolved or Closed.
     /// </exception>
-    public async Task<EscalationResultDto> HandleAsync(int id, EscalateTicketRequest request, CancellationToken ct)
+    public async Task<EscalationResultDto> HandleAsync(int id, string escalatedBy, EscalateTicketRequest request, CancellationToken ct)
     {
         var ticket = await tickets.GetByIdAsync(id, ct) ?? throw new NotFoundException("Ticket", id);
 
@@ -48,7 +48,7 @@ public sealed class EscalateTicketCommandHandler(
             category, customer.Tier, newPriority, ticket.AssignedAgentId, now, await agents.GetWorkloadsAsync(ct));
 
         var escalation = ticket.Escalate(
-            decision.DueAtUtc, decision.Assignment.Agent?.Id, request.Reason.Trim(), request.EscalatedBy.Trim(), now);
+            decision.DueAtUtc, decision.Assignment.Agent?.Id, request.Reason.Trim(), escalatedBy.Trim(), now);
 
         await tickets.AddEscalationAsync(escalation, ct);
         await unitOfWork.SaveChangesAsync(ct);

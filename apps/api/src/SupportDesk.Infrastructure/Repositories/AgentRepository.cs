@@ -14,6 +14,10 @@ public sealed class AgentRepository(SupportDbContext db) : IAgentRepository
             .Include(a => a.Specializations)
             .FirstOrDefaultAsync(a => a.Id == id, ct);
 
+    /// <summary>The email column is unique, and the database compares it without regard to case.</summary>
+    public Task<Agent?> GetByEmailAsync(string email, CancellationToken ct) =>
+        db.Set<Agent>().AsNoTracking().FirstOrDefaultAsync(a => a.Email == email, ct);
+
     /// <summary>Two queries however many agents there are: the agents, then one count per agent.</summary>
     public async Task<IReadOnlyList<AgentWorkload>> GetWorkloadsAsync(CancellationToken ct)
     {

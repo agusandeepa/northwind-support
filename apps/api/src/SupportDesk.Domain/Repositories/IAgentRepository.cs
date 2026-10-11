@@ -11,4 +11,11 @@ public interface IAgentRepository
 
     /// <summary>Every agent, with the number of open tickets each one holds.</summary>
     Task<IReadOnlyList<AgentWorkload>> GetWorkloadsAsync(CancellationToken ct);
+        /// <summary>
+    /// The agent with this email address, or null. Used to sign in; the lookup is untracked
+    /// because signing in never changes the agent.
+    /// </summary>
+    Task<Agent?> GetByEmailAsync(string email, CancellationToken ct);
+
 }
+

@@ -7,8 +7,7 @@ public class EscalateTicketRequestValidatorTests
 {
     private readonly EscalateTicketRequestValidator _validator = new();
 
-    private bool IsValid(string reason, string escalatedBy = "alex@test.example") =>
-        _validator.Validate(new EscalateTicketRequest(reason, escalatedBy)).IsValid;
+    private bool IsValid(string reason) => _validator.Validate(new EscalateTicketRequest(reason)).IsValid;
 
     [Theory]
     [InlineData("abcde")]
@@ -27,12 +26,4 @@ public class EscalateTicketRequestValidatorTests
 
     [Fact]
     public void AReasonOf501Characters_IsRejected() => Assert.False(IsValid(new string('a', 501)));
-
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void ABlankActor_IsRejected(string actor) => Assert.False(IsValid("A good reason", actor));
-
-    [Fact]
-    public void AnActorOver100Characters_IsRejected() => Assert.False(IsValid("A good reason", new string('a', 101)));
 }

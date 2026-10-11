@@ -214,7 +214,7 @@ public sealed class TicketQueriesFilterTests : IDisposable
     {
         using var db = _database.CreateContext();
 
-        var queries = new TicketQueries(db, new FixedClock());
+        var queries = new TicketQueries(db, new FixedClock(), TestSlaOptions.Create());
 
         return await queries.GetPagedAsync(query.Normalized(), CancellationToken.None);
     }

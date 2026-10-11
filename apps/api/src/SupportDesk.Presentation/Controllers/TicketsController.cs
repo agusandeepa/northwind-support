@@ -3,11 +3,12 @@ using SupportDesk.Application.Contracts.Common;
 using SupportDesk.Application.Contracts.Tickets;
 using SupportDesk.Application.Features.Tickets.Commands.AssignTicket;
 using SupportDesk.Application.Features.Tickets.Commands.ChangeTicketStatus;
+using SupportDesk.Application.Features.Tickets.Commands.EscalateTicket;
 using SupportDesk.Application.Features.Tickets.Commands.RaiseTicket;
+using SupportDesk.Application.Features.Tickets.Queries.GetEscalations;
 using SupportDesk.Application.Features.Tickets.Queries.GetTicket;
 using SupportDesk.Application.Features.Tickets.Queries.SearchTickets;
-using SupportDesk.Application.Features.Tickets.Commands.EscalateTicket;
-using SupportDesk.Application.Features.Tickets.Queries.GetEscalations;
+using SupportDesk.Presentation.Auth;
 
 namespace SupportDesk.Presentation.Controllers;
 
@@ -30,7 +31,8 @@ public sealed class TicketsController : ControllerBase
         handler.HandleAsync(id, ct);
 
     /// <summary>Raises a new ticket.</summary>
-    [HttpPost]    public async Task<ActionResult<TicketCreatedDto>> Create(
+    [HttpPost]
+    public async Task<ActionResult<TicketCreatedDto>> Create(
         CreateTicketRequest request,
         [FromServices] RaiseTicketCommandHandler handler,
         CancellationToken ct)
@@ -58,14 +60,17 @@ public sealed class TicketsController : ControllerBase
         CancellationToken ct) =>
         handler.HandleAsync(id, request, ct);
 
-    /// <summary>Escalates a ticket one priority level and records who asked and why.</summary>
+    /// <summary>
+    /// Escalates a ticket one priority level and records why. Who escalated it comes from the
+    /// sign-in token, not from the request body.
+    /// </summary>
     [HttpPost("{id:int}/escalate")]
     public Task<EscalationResultDto> Escalate(
         int id,
         EscalateTicketRequest request,
         [FromServices] EscalateTicketCommandHandler handler,
         CancellationToken ct) =>
-        handler.HandleAsync(id, request, ct);
+        handler.HandleAsync(id, User.AgentName(), request, ct);
 
     /// <summary>A ticket's escalation history, newest first.</summary>
     [HttpGet("{id:int}/escalations")]
