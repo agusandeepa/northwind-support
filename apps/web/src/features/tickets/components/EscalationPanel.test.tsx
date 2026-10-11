@@ -12,14 +12,9 @@ vi.mock('../../../api/tickets', () => ({
 
 const escalateTicket = vi.mocked(ticketsApi.escalateTicket);
 
-async function fillIn(reason: string, name = 'Alex Turner') {
+async function fillIn(reason: string) {
   const user = userEvent.setup();
   await user.type(screen.getByLabelText('Reason'), reason);
-
-  // Typing an empty string is an error in user-event; an empty name is simply left empty.
-  if (name !== '') {
-    await user.type(screen.getByLabelText('Your name'), name);
-  }
 
   return user;
 }
@@ -41,28 +36,24 @@ describe('EscalationPanel', () => {
     expect(onEscalated).not.toHaveBeenCalled();
   });
 
-  it('blocks a missing name and does not call the API', async () => {
-    render(<EscalationPanel ticket={ticketDetail()} onEscalated={vi.fn()} />);
-
-    const user = await fillIn('A good reason', '');
-    await user.click(screen.getByRole('button', { name: 'Escalate one level' }));
-
-    expect(screen.getByText('Enter your name.')).toBeInTheDocument();
-    expect(escalateTicket).not.toHaveBeenCalled();
-  });
-
-  it('sends the trimmed input and hands the result up', async () => {
+  it('sends only the trimmed reason (who escalates comes from the token) and hands the result up', async () => {
     const result = { ticket: ticketDetail({ priority: 'Critical' }), escalation: escalation() };
     escalateTicket.mockResolvedValue(result);
     const onEscalated = vi.fn();
     render(<EscalationPanel ticket={ticketDetail()} onEscalated={onEscalated} />);
 
-    const user = await fillIn('  Customer is blocked  ', '  Alex Turner ');
+    const user = await fillIn('  Customer is blocked  ');
     await user.click(screen.getByRole('button', { name: 'Escalate one level' }));
 
-    expect(escalateTicket).toHaveBeenCalledWith(12, { reason: 'Customer is blocked', escalatedBy: 'Alex Turner' });
+    expect(escalateTicket).toHaveBeenCalledWith(12, { reason: 'Customer is blocked' });
     expect(onEscalated).toHaveBeenCalledWith(result);
     expect(screen.getByLabelText('Reason')).toHaveValue('');
+  });
+
+  it('does not offer a field for who is escalating', () => {
+    render(<EscalationPanel ticket={ticketDetail()} onEscalated={vi.fn()} />);
+
+    expect(screen.queryByLabelText('Your name')).not.toBeInTheDocument();
   });
 
   it('shows a pending state while the request is in flight', async () => {

@@ -1,3 +1,4 @@
+import { getSession, notifyUnauthorized } from '../auth/session';
 import type { ProblemDetails } from '../types/api';
 
 /**
@@ -26,19 +27,29 @@ export class ApiError extends Error {
 }
 
 /**
- * The single place that talks to the API. Returns parsed JSON, or throws an
- * {@link ApiError} that callers can show to the user.
+ * The single place that talks to the API. Sends the signed-in agent's token with every call,
+ * and returns parsed JSON, or throws an {@link ApiError} that callers can show to the user.
  */
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const session = getSession();
+
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
+      ...(session ? { Authorization: `Bearer ${session.token}` } : {}),
       ...(init?.headers ?? {}),
     },
   });
 
   if (!response.ok) {
+    // A 401 while signed in means the server rejected the token (it expired, say), so the
+    // session ends and the protected routes send the user to login. A 401 with no session
+    // is just a failed sign-in, which the login form reports itself.
+    if (response.status === 401 && session) {
+      notifyUnauthorized();
+    }
+
     const problem = await readProblem(response);
 
     throw new ApiError(

@@ -1,3 +1,4 @@
+import type { Session } from '../auth/session';
 import type { CreatedTicket, Escalation, PagedResult, TicketDetail, TicketListItem } from '../types/api';
 
 /** A list row with sensible defaults, so tests only state what they care about. */
@@ -28,7 +29,6 @@ export function page(items: TicketListItem[]): PagedResult<TicketListItem> {
     totalCount: items.length,
     totalPages: 1,
   };
-
 }
 
 export function ticketDetail(overrides: Partial<TicketDetail> = {}): TicketDetail {
@@ -64,7 +64,6 @@ export function escalation(overrides: Partial<Escalation> = {}): Escalation {
     escalatedBy: 'Alex Turner',
     escalatedAtUtc: '2026-09-24T08:00:00Z',
     ...overrides,
-
   };
 }
 
@@ -76,6 +75,16 @@ export function createdTicket(overrides: Partial<CreatedTicket> = {}): CreatedTi
       slaReason: 'Critical priority: 4 h base window x 0.5 for a Premium customer = 2 h.',
       assignmentReason: 'Assigned to Sara Lindqvist: fewest open tickets (2) among 3 eligible agent(s).',
     },
+    ...overrides,
+  };
+}
+
+/** A signed-in session that has not expired. */
+export function makeSession(overrides: Partial<Session> = {}): Session {
+  return {
+    token: 'test-token',
+    expiresAtUtc: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    agent: { id: 1, fullName: 'Alex Turner', email: 'alex.turner@northwind-support.example' },
     ...overrides,
   };
 }

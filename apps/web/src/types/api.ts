@@ -179,13 +179,31 @@ export interface Escalation {
   escalatedAtUtc: string;
 }
 
+export interface EscalateTicketPayload {
+  reason: string;
+}
 export interface EscalatePayload {
   reason: string;
-  escalatedBy: string;
 }
 
 /** What escalating returns: the ticket as it now stands, and the row that was recorded. */
 export interface EscalationResult {
   ticket: TicketDetail;
   escalation: Escalation;
+}
+export interface AuthenticatedAgent {
+  id: number;
+  fullName: string;
+  email: string;
+}
+
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+
+export interface LoginResult {
+  token: string;
+  expiresAtUtc: string;
+  agent: AuthenticatedAgent;
 }
