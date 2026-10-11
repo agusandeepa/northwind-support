@@ -89,6 +89,7 @@ export interface TicketFilters {
   categoryId?: number;
   customerId?: number;
   assignedAgentId?: number;
+    slaStatus?: SlaStatus;
   unassignedOnly?: boolean;
   page: number;
   pageSize: number;
@@ -149,4 +150,42 @@ export interface ProblemDetails {
   detail?: string;
   traceId?: string;
   errors?: Record<string, string[]>;
+
+}
+
+/** Why a new ticket got the priority, due date and owner it did, in plain words. */
+export interface Triage {
+  priorityReason: string;
+  slaReason: string;
+  assignmentReason: string;
+}
+
+/** What raising a ticket returns: the ticket, and how it was triaged. */
+export interface CreatedTicket extends TicketDetail {
+  triage: Triage;
+}
+
+/** One row of a ticket's escalation history. */
+export interface Escalation {
+  id: number;
+  fromPriority: TicketPriority;
+  toPriority: TicketPriority;
+  fromAgent: AgentSummary | null;
+  toAgent: AgentSummary | null;
+  fromDueAtUtc: string | null;
+  toDueAtUtc: string | null;
+  reason: string;
+  escalatedBy: string;
+  escalatedAtUtc: string;
+}
+
+export interface EscalatePayload {
+  reason: string;
+  escalatedBy: string;
+}
+
+/** What escalating returns: the ticket as it now stands, and the row that was recorded. */
+export interface EscalationResult {
+  ticket: TicketDetail;
+  escalation: Escalation;
 }
