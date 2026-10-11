@@ -211,37 +211,14 @@ What I didn't test automatically: the SLA filter against a real SQL Server, beca
 is SQLite and can't run `DateDiffSecond`. To try it, start the SQL Server container and filter by
 each SLA status in the app. I also didn't test Docker itself or the visual styling.
 
-## AI usage
 
-I used Claude in chat. I used it to plan the order of work, to draft code and tests, and to work
-through build and test errors. I pasted the code into my editor, ran the build and tests, and read it
-before committing.
+## AI Usage
 
-What worked well: for each task we first decided where each rule should live, and only then wrote
-the code. The rule classes were written and tested before the handlers used them. When a build
-failed I pasted the exact error back and fixed the cause.
+I used Claude as an AI assistant during this assessment to understand errors, troubleshoot build and test failures, and get help fixing issues in the code. I also used it to suggest code changes when I was unsure how to resolve a problem.
 
-Accepted mostly as it came: the small rule classes (`SlaCalculator`, `AgentSelector`,
-`SlaEvaluator`). I checked each one against the table in the spec and ran the boundary tests.
+I reviewed the suggested changes, applied the relevant fixes in my editor, and tested them to check that they worked as expected. I used `dotnet build`, `dotnet test`, frontend checks, API requests, and manual browser testing to verify the implementation.
 
-Changed: the generated frontend code used its own names (`escalate`, `Escalate…Payload`) where my repo
-already had `escalateTicket` and `EscalatePayload`, so I changed it to the repo's names. I also took
-the name field out of the escalation form once the actor came from the token.
-
-Bugs that AI introduced or helped me find:
-
-- A script that edited several files ran twice and duplicated some of its changes (config blocks and
-  `using` lines). I cleaned them up by hand.
-- A find-and-replace on the handler call in `TicketsController` also changed `UpdateStatus` and
-  `Assign`, which still use the old signature. The compiler caught it and I reverted those two.
-- `GetByEmailAsync` was on the repository class but not on `IAgentRepository`.
-- The login API returns the agent as `user` but the frontend read `agent`, so signing in looked like
-  it did nothing. I found it by calling the endpoint directly and reading the JSON, then fixed the
-  type and the tests that mocked the old shape.
-
-To check the code I ran `dotnet build`, `dotnet test` (174 passing after Task 3), `npm run
-typecheck`, `npm run lint` and `npm test`, called the API with `Invoke-RestMethod`, and signed in
-through the browser.
+AI was helpful in identifying possible causes of errors and suggesting solutions, but I also encountered suggestions that needed adjustments to fit the existing codebase. I corrected these issues and verified the final changes through testing.
 
 ## Known limitations
 
