@@ -1,4 +1,4 @@
-# SQL Server for local development only. The password below is a throwaway local
+# SQL Server and the API for local development only. The password below is a throwaway local
 # placeholder - never commit a real credential.
 services:
   sqlserver:
@@ -22,6 +22,21 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      # Everything the image needs arrives here, at run time. See .env.example.
+      ASPNETCORE_ENVIRONMENT: "${ASPNETCORE_ENVIRONMENT:-Development}"
+      ConnectionStrings__Default: "Server=sqlserver,1433;Database=SupportDesk;User Id=sa;Password=${MSSQL_SA_PASSWORD:-Local_Dev_Password1};TrustServerCertificate=True;Encrypt=False"
+      Jwt__Key: "${Jwt__Key:-}"
+    ports:
+      - "5080:8080"
 
 volumes:
   supportdesk-sql:

@@ -9,6 +9,7 @@ using SupportDesk.Infrastructure;
 using SupportDesk.Presentation.Auth;
 using SupportDesk.Presentation.Extensions;
 using SupportDesk.Presentation.Filters;
+using SupportDesk.Presentation.Health;
 using SupportDesk.Presentation.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -69,6 +70,9 @@ builder.Services
 builder.Services.AddAuthorizationBuilder()
     .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
+// GET /health: is the database reachable?
+builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
+
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
@@ -98,5 +102,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Open without a token, so a container orchestrator or a person can check on the API.
+app.MapHealthChecks("/health").AllowAnonymous();
 
 app.Run();

@@ -178,10 +178,6 @@ export interface Escalation {
   escalatedBy: string;
   escalatedAtUtc: string;
 }
-
-export interface EscalateTicketPayload {
-  reason: string;
-}
 export interface EscalatePayload {
   reason: string;
 }
@@ -191,6 +187,7 @@ export interface EscalationResult {
   ticket: TicketDetail;
   escalation: Escalation;
 }
+
 export interface AuthenticatedAgent {
   id: number;
   fullName: string;
@@ -202,8 +199,9 @@ export interface LoginPayload {
   password: string;
 }
 
+/** What POST /api/auth/login returns: the token, when it expires, and who signed in. */
 export interface LoginResult {
   token: string;
   expiresAtUtc: string;
-  agent: AuthenticatedAgent;
+  user: AuthenticatedAgent;
 }

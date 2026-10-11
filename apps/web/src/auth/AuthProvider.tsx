@@ -15,8 +15,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     const result = await authApi.login({ email, password });
 
-    setSession({ token: result.token, expiresAtUtc: result.expiresAtUtc, agent: result.agent });
-    setAgent(result.agent);
+    // The API names the signed-in agent "user"; inside the app it is the session's agent.
+    setSession({ token: result.token, expiresAtUtc: result.expiresAtUtc, agent: result.user });
+    setAgent(result.user);
   }, []);
 
   // AU-13: any 401 on a signed-in session ends it; the protected routes then send the user to login.

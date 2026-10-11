@@ -6,8 +6,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { authApi } from '../../api/auth';
 import { ApiError } from '../../api/client';
 import { AuthProvider } from '../../auth/AuthProvider';
-import { clearSession, getSession } from '../../auth/session';
+import { clearSession, getSession, type Session } from '../../auth/session';
 import { makeSession } from '../../test/fixtures';
+import type { LoginResult } from '../../types/api';
 import { LoginPage } from './LoginPage';
 
 vi.mock('../../api/auth', () => ({
@@ -17,6 +18,11 @@ vi.mock('../../api/auth', () => ({
 }));
 
 const login = vi.mocked(authApi.login);
+
+/** The API calls the signed-in agent "user"; the app keeps it as the session's agent. */
+function loginResult(session: Session): LoginResult {
+  return { token: session.token, expiresAtUtc: session.expiresAtUtc, user: session.agent };
+}
 
 function renderLogin(entry: InitialEntry = '/login') {
   return render(
@@ -67,7 +73,7 @@ describe('LoginPage', () => {
 
   it('signs in and lands on the ticket list by default', async () => {
     const session = makeSession({ token: 'jwt-token' });
-    login.mockResolvedValue(session);
+    login.mockResolvedValue(loginResult(session));
     renderLogin();
 
     await signIn('alex.turner@northwind-support.example', 'LocalDevOnly!1');
@@ -77,7 +83,7 @@ describe('LoginPage', () => {
   });
 
   it('returns the visitor to the page they originally wanted', async () => {
-    login.mockResolvedValue(makeSession());
+    login.mockResolvedValue(loginResult(makeSession()));
     renderLogin({ pathname: '/login', state: { from: { pathname: '/tickets/12' } } });
 
     await signIn('alex.turner@northwind-support.example', 'LocalDevOnly!1');
