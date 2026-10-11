@@ -1,4 +1,4 @@
-import type { Escalation, PagedResult, TicketDetail, TicketListItem } from '../types/api';
+import type { CreatedTicket, Escalation, PagedResult, TicketDetail, TicketListItem } from '../types/api';
 
 /** A list row with sensible defaults, so tests only state what they care about. */
 export function ticketListItem(overrides: Partial<TicketListItem> = {}): TicketListItem {
@@ -63,6 +63,19 @@ export function escalation(overrides: Partial<Escalation> = {}): Escalation {
     reason: 'The customer cannot pay their invoice',
     escalatedBy: 'Alex Turner',
     escalatedAtUtc: '2026-09-24T08:00:00Z',
+    ...overrides,
+
+  };
+}
+
+export function createdTicket(overrides: Partial<CreatedTicket> = {}): CreatedTicket {
+  return {
+    ...ticketDetail({ priority: 'Critical', dueAtUtc: '2026-10-12T12:00:00Z', slaStatus: 'WithinSla' }),
+    triage: {
+      priorityReason: 'Outage tickets are always Critical.',
+      slaReason: 'Critical priority: 4 h base window x 0.5 for a Premium customer = 2 h.',
+      assignmentReason: 'Assigned to Sara Lindqvist: fewest open tickets (2) among 3 eligible agent(s).',
+    },
     ...overrides,
   };
 }
