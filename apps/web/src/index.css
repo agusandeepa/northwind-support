@@ -443,3 +443,53 @@ textarea[aria-invalid='true'] {
   white-space: nowrap;
   border: 0;
 }
+
+.form__fieldset {
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.escalation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.escalation {
+  border-top: 1px solid var(--colour-border);
+  padding: 12px 0;
+}
+
+.escalation:first-child {
+  border-top: none;
+}
+
+.escalation__reason {
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+
+.escalation__changes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.escalation__changes dt {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  color: var(--colour-muted);
+}
+
+.escalation__changes dd {
+  margin: 0;
+}
+
+.escalation__meta {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  color: var(--colour-muted);
+}
